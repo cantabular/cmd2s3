@@ -1,6 +1,6 @@
 module github.com/sensiblecodeio/cmd2s3
 
-go 1.19
+go 1.22.3
 
 require github.com/aws/aws-sdk-go v1.44.14
 
