@@ -26,7 +26,7 @@ func main() {
 
 	bucket, key, err := parseS3URL(s3url)
 	if err != nil {
-		log.Fatal("invalid URL: %v", err)
+		log.Fatalf("invalid URL: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
