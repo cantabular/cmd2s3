@@ -11,9 +11,10 @@ import (
 	"os/exec"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 func main() {
@@ -49,18 +50,23 @@ func main() {
 		log.Fatalf("Invoking shell command %q: %v", command, err)
 	}
 
-	sess := session.Must(session.NewSession())
-	uploader := s3manager.NewUploader(sess, func(u *s3manager.Uploader) {
+	cfg, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		log.Fatalf("s4cat: unable to load config: %v", err)
+	}
+	svc := s3.NewFromConfig(cfg)
+
+	uploader := manager.NewUploader(svc, func(u *manager.Uploader) {
 		// 128MiB per part (s3manager buffers these)
 		u.PartSize = 128 * 1024 * 1024
 		// Max 4 streams to s3 (=> max memory usage 512MiB).
 		u.Concurrency = 4
 	})
 
-	resp, err := uploader.UploadWithContext(ctx, &s3manager.UploadInput{
+	resp, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket:               bucket,
 		Key:                  key,
-		ServerSideEncryption: aws.String("AES256"),
+		ServerSideEncryption: types.ServerSideEncryptionAes256,
 		Body:                 cmdStdout,
 	})
 	if err != nil {
@@ -115,16 +121,16 @@ func (r *readWithWaitErrorImpl) Read(p []byte) (int, error) {
 }
 
 func uploadStream(bucket, key string, r io.Reader) error {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
+	cfg, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		log.Fatalf("s4cat: unable to load config: %v", err)
+	}
+	svc := s3.NewFromConfig(cfg)
 
-	s3c := s3.New(sess)
-
-	upload, err := s3c.CreateMultipartUpload(&s3.CreateMultipartUploadInput{
+	upload, err := svc.CreateMultipartUpload(context.Background(), &s3.CreateMultipartUploadInput{
 		Bucket:               aws.String(bucket), //TODO
 		Key:                  aws.String(key),    //TODO
-		ServerSideEncryption: aws.String("AES256"),
+		ServerSideEncryption: types.ServerSideEncryptionAes256,
 	})
 	if err != nil {
 		return err
@@ -145,7 +151,7 @@ partsLoop:
 				break partsLoop
 			}
 
-			_, err = s3c.UploadPart(&s3.UploadPartInput{
+			_, err = svc.UploadPart(context.Background(), &s3.UploadPartInput{
 				Bucket:   upload.Bucket,
 				Key:      upload.Key,
 				UploadId: upload.UploadId,
@@ -169,7 +175,7 @@ partsLoop:
 		goto abort
 	}
 
-	_, err = s3c.CompleteMultipartUpload(&s3.CompleteMultipartUploadInput{
+	_, err = svc.CompleteMultipartUpload(context.Background(), &s3.CompleteMultipartUploadInput{
 		Bucket:   upload.Bucket,
 		Key:      upload.Key,
 		UploadId: upload.UploadId,
@@ -181,7 +187,7 @@ partsLoop:
 	return nil
 
 abort:
-	_, err2 := s3c.AbortMultipartUpload(&s3.AbortMultipartUploadInput{
+	_, err2 := svc.AbortMultipartUpload(context.Background(), &s3.AbortMultipartUploadInput{
 		UploadId: upload.UploadId,
 	})
 	if err2 != nil {
