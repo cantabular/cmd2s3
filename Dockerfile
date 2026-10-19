@@ -1,4 +1,4 @@
-FROM golang:1.27.1-alpine@sha256:4cb7ac979db5fcc41cae44b2227ba5ab8a51e8807f40d9ba4dee20a0ad960b5b
+FROM golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d
 
 # Turn off cgo for a more static binary.
 # Specify cache directory so that we can run as nobody to build the binary.
