@@ -12,7 +12,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
+	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
@@ -56,24 +57,24 @@ func main() {
 	}
 	svc := s3.NewFromConfig(cfg)
 
-	uploader := manager.NewUploader(svc, func(u *manager.Uploader) {
+	uploader := transfermanager.New(svc, func(u *transfermanager.Options) {
 		// 128MiB per part (s3manager buffers these)
-		u.PartSize = 128 * 1024 * 1024
+		u.PartSizeBytes = 128 * 1024 * 1024
 		// Max 4 streams to s3 (=> max memory usage 512MiB).
 		u.Concurrency = 4
 	})
 
-	resp, err := uploader.Upload(ctx, &s3.PutObjectInput{
+	resp, err := uploader.UploadObject(ctx, &transfermanager.UploadObjectInput{
 		Bucket:               bucket,
 		Key:                  key,
-		ServerSideEncryption: types.ServerSideEncryptionAes256,
+		ServerSideEncryption: tmtypes.ServerSideEncryptionAes256,
 		Body:                 cmdStdout,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Printf("Object uploaded: %v - %v", resp.Location, resp.UploadID)
+	log.Printf("Object uploaded: %v", aws.ToString(resp.ETag))
 }
 
 func parseS3URL(urlStr string) (bucket, key *string, err error) {
